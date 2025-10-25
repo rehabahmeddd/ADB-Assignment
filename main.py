@@ -16,17 +16,20 @@ if __name__ == "__main__":
     print("\nInitial File Blocks:")
     storage.print_blocks()
 
-    print("\nInitial B+ Tree:")
-    tree.print_tree()
+    #print("\nInitial B+ Tree:")
+    #tree.print_tree()
+
+
+    # line 2 is record[0] , line 27 is record[25]
 
     # # Step 2: Insert records 27, 14, 22
-    # for i in [27, 14, 22]:
-    #     rec = records[i - 1]
-    #     addr = storage.insert_record(rec)
-    #     tree.insert(rec.ssn, addr)
+    for i in [26, 13, 21]:
+        rec = records[i - 1]
+        addr = storage.insert_record(rec)
+        tree.insert(rec.ssn, addr)
 
-    # print("\nAfter Insertions (27, 14, 22):")
-    # tree.print_tree()
+    print("\nAfter Insertions (27, 14, 22):")
+    tree.print_tree()
 
     # # Step 3: Delete records 11, 6, 3 (deletion logic to be added)
     # for i in [11, 6, 3]:

@@ -55,7 +55,7 @@ class BPlusTree:
             parent.keys.insert(pos, right.keys[0])
             left.parent = right.parent = parent
 
-            if len(parent.keys) > self.p_internal:
+            if len(parent.child_pointers) > self.p_internal:
                 self.split_internal(parent)
 
     def split_internal(self, node):
@@ -90,7 +90,7 @@ class BPlusTree:
             parent.keys.insert(pos, promoted)
             left.parent = right.parent = parent
 
-            if len(parent.keys) > self.p_internal:
+            if len(parent.child_pointers) > self.p_internal:
                 self.split_internal(parent)
 
     def print_tree(self):
