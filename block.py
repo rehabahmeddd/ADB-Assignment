@@ -20,15 +20,26 @@ class Block:
                 return i
         return None
 
-    def delete_slot(self, index: int):
-        self.slots[index] = None
-
     def read_slot(self, index: int) -> Optional[Record]:
         data = self.slots[index]
         return Record.unpack(data) if data else None
 
     def dump(self):
         return [Record.unpack(s) if s else None for s in self.slots]
+    
+    def delete_slot(self, index: int):
+        """
+        Mark the record in slot `index` as deleted by setting the deletion marker byte.
+        We keep the slot occupied (not None) so slot remains allocated but marked deleted.
+        """
+        data = self.slots[index]
+        if data is None:
+            # Already empty — nothing to mark
+            return
+        # Unpack record, set deleted flag, re-pack
+        rec = Record.unpack(data)
+        rec.deleted = True
+        self.slots[index] = rec.pack()
 
     def __repr__(self):
         used = sum(1 for s in self.slots if s is not None)

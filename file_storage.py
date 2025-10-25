@@ -37,3 +37,24 @@ class FileStorage:
                 for i, rec in enumerate(records):
                    if rec: print(f"  Slot {i}: {rec.name}, SSN={rec.ssn}, Dept={rec.departmentcode}, Salary={rec.salary}")
         print("================================\n")
+        
+    def delete_record(self, ptr: Tuple[int, int]):
+        """Mark the record referred by pointer as deleted."""
+        bid, slot = ptr
+        if bid < 0 or bid >= len(self.blocks):
+            raise IndexError("Block id out of range")
+        self.blocks[bid].delete_slot(slot)
+
+    def find_pointer_by_ssn(self, ssn: str):
+        """
+        Linear scan to find a record by SSN and return pointer (block_id, slot).
+        Useful for the deletion pipeline when the tree does not provide the pointer.
+        """
+        for blk in self.blocks:
+            for idx, data in enumerate(blk.slots):
+                if data is None:
+                    continue
+                rec = Block.read_slot(blk, idx)  # or blk.read_slot(idx)
+                if rec and rec.ssn == ssn:
+                    return (blk.block_id, idx)
+        return None
