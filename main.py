@@ -33,7 +33,7 @@ if __name__ == "__main__":
     tree.visualize("tree before deletions.png")
 
     # # Step 3: Delete records 11, 6, 3 (deletion logic to be added)
-    for i in [8, 6, 3,7,21,5,2]:
+    for i in [10, 5, 2]:
         rec = records[i - 1]
         ssn = rec.ssn
         # tree.delete(ssn) needs to remove key and pointer from tree

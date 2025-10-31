@@ -28,15 +28,9 @@ class Block:
         return [Record.unpack(s) if s else None for s in self.slots]
     
     def delete_slot(self, index: int):
-        """
-        Mark the record in slot `index` as deleted by setting the deletion marker byte.
-        We keep the slot occupied (not None) so slot remains allocated but marked deleted.
-        """
         data = self.slots[index]
         if data is None:
-            # Already empty — nothing to mark
             return
-        # Unpack record, set deleted flag, re-pack
         rec = Record.unpack(data)
         rec.deleted = True
         self.slots[index] = rec.pack()

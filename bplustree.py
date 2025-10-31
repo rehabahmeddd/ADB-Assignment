@@ -94,39 +94,6 @@ class BPlusTree:
             if len(parent.child_pointers) > self.p_internal:
                 self.split_internal(parent)
 
-    # def print_tree(self):
-    #     print("\n===== B+ TREE STRUCTURE =====")
-
-    #     def _print_node(node, level=0, prefix="Root"):
-    #         indent = "  " * level
-    #         node_type = "Leaf" if node.is_leaf else "Internal"
-    #         print(f"{indent}{prefix} ({node_type}): {node.keys}")
-
-    #         if node.is_leaf:
-    #             for i, ptr in enumerate(node.pointers):
-    #                 print(f"{indent}   ↳ Key={node.keys[i]}, Ptr={ptr}")
-    #         else:
-    #             for i, child in enumerate(node.child_pointers):
-    #                 _print_node(child, level + 1, f"Child {i}")
-
-    #     _print_node(self.root)
-
-    #     # print leaf chain for validation
-    #     print("==============================")
-    #     print("\n-- Leaf Chain (in order) --")
-    #     node = self.root
-    #     while not node.is_leaf:
-    #         node = node.child_pointers[0]
-
-    #     chain = []
-    #     while node:
-    #         chain.append(f"{node.keys}")
-    #         node = node.next
-
-    #     print(" → ".join(chain))
-    #     print("--------------------------------\n")
-    
-    # ======================================>>>>>>>>>>>>>>>>>>>
 
     def find_leaf_with_parent_info(self, key):
         """Return leaf and the path (list of (node, index_in_parent)) for convenience."""
@@ -142,19 +109,10 @@ class BPlusTree:
         return node, path
 
     def delete(self, key):
-        """
-        Delete key from B+ tree following rules:
-         - remove key from leaf
-         - if leaf underflows (< min_keys), try borrow left then right, else merge
-         - propagate fixes up the tree
-        """
-        # quick search leaf
         leaf, path = self.find_leaf_with_parent_info(key)
 
         # 1) remove key from leaf if present
         if key not in leaf.keys:
-            # Not found — nothing to delete
-            # Could raise or just return
             print(f"Warning: key {key} not found in index.")
             return
 
@@ -163,7 +121,6 @@ class BPlusTree:
         leaf.keys.pop(idx)
         leaf.pointers.pop(idx)
         
-
         # if root is leaf, handle trivial case
         if leaf is self.root:
             if len(leaf.keys) == 0:
@@ -197,9 +154,6 @@ class BPlusTree:
                 parent.keys[idx - 1] = leaf.keys[0]
 
     def _fix_leaf_underflow(self, leaf):
-        """
-        Try borrow from left sibling first, else right sibling, else merge.
-        """
         parent = leaf.parent
         if parent is None:
             return  # shouldn't happen (we handled root earlier)
@@ -256,10 +210,6 @@ class BPlusTree:
             self._fix_internal_after_delete(parent)
 
     def _fix_internal_after_delete(self, node):
-        """
-        Fix internal node underflow: node is an internal node that might be underfull
-        (child_pointers < min_pointers). Borrow from siblings or merge and propagate up.
-        """
         # If node is root, special rules:
         if node is self.root:
             # If root has only one child and is an internal node -> shrink tree
@@ -332,7 +282,7 @@ class BPlusTree:
             parent.child_pointers.pop(pos + 1)
             self._fix_internal_after_delete(parent)
         
-        # ===================> printing
+        
     def print_tree(self):
         """Level-order printing of tree nodes (keys only)."""
         from collections import deque
@@ -397,10 +347,6 @@ class BPlusTree:
 
 # ==========> visualizer
     def visualize(self, filename="bplustree", view=True):
-            """
-            Visualize the B+ Tree using Graphviz.
-            Creates a PNG file and optionally opens it.
-            """
             dot = Digraph(comment="B+ Tree", format="png")
             dot.attr('node', shape='record', style='filled', fillcolor='lightgrey')
 
@@ -416,15 +362,15 @@ class BPlusTree:
                 if parent_name:
                     dot.edge(parent_name, node_id, label=edge_label)
 
-                # Connect children if internal node
+                
                 if not node.is_leaf:
                     for i, child in enumerate(node.child_pointers):
                         add_node(child, node_id, edge_label=f"child {i}")
 
-            # Start recursive addition from root
+            
             add_node(self.root)
 
-            # Add leaf chain links (dotted)
+            
             leaf = self.root
             while not leaf.is_leaf:
                 leaf = leaf.child_pointers[0]
@@ -432,7 +378,7 @@ class BPlusTree:
                 dot.edge(str(id(leaf)), str(id(leaf.next)), style="dashed", color="blue")
                 leaf = leaf.next
 
-            # Save and optionally render
+            
             output_path = dot.render(filename, view=view)
             print(f"B+ tree visualization saved to: {output_path}")
             
