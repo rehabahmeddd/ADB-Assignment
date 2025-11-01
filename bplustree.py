@@ -1,5 +1,9 @@
 from node import Node, LeafNode, InternalNode
 from graphviz import Digraph
+import imageio.v2 as iio  
+import os                 
+import glob               
+from PIL import Image     
 
 class BPlusTree:
     def __init__(self, p_internal=3, p_leaf=2):
@@ -16,18 +20,68 @@ class BPlusTree:
             node = node.child_pointers[i]
         return node
 
-    def insert(self, key, pointer):
+    def insert(self, key, pointer, animate=False):
+        """
+        Inserts a key-pointer pair.
+        If animate=True, generates a GIF of the insertion process.
+        """
+        storyboard = []
+        if animate:
+            # Ensure the frames directory exists
+            if not os.path.exists("frames"):
+                os.makedirs("frames")
+            
+            # Clean up old frames from a previous run
+            old_frames = glob.glob("frames/frame_*.png*")
+            if old_frames:
+                self._cleanup_frames(old_frames)
+
+        
         leaf = self.find_leaf(key)
+
+        # Animation logic
+        if animate:
+            frame_file = f"frames/frame_{len(storyboard):03d}" # No .png extension here
+            self.visualize(frame_file, title=f"1. Find leaf for key: {key}", highlight_nodes=[leaf])
+            storyboard.append(frame_file + ".png") # Add .png for the list
+
         i = 0
         while i < len(leaf.keys) and leaf.keys[i] < key:
             i += 1
         leaf.keys.insert(i, key)
         leaf.pointers.insert(i, pointer)
 
-        if len(leaf.keys) > self.p_leaf:
-            self.split_leaf(leaf)
+        # Animation logic
+        if animate:
+            frame_file = f"frames/frame_{len(storyboard):03d}"
+            self.visualize(frame_file, title=f"2. Insert key {key} into leaf", highlight_nodes=[leaf])
+            storyboard.append(frame_file + ".png")
 
-    def split_leaf(self, leaf):
+        if len(leaf.keys) > self.p_leaf:
+            # Pass the storyboard to the split function
+            self.split_leaf(leaf, storyboard if animate else None)
+
+        # Animation logic
+        if animate:
+            frame_file = f"frames/frame_{len(storyboard):03d}"
+            self.visualize(frame_file, title=f"3. Insertion of {key} complete!")
+            storyboard.append(frame_file + ".png")
+            
+            # --- Create the GIF ---
+            output_gif = f"insert_animation_{key}.gif"
+            self._create_gif(storyboard, output_gif)
+            self._cleanup_frames(storyboard)
+
+    def split_leaf(self, leaf, storyboard=None):
+        """
+        Splits a leaf node.
+        If a storyboard is provided, generates animation frames.
+        """
+        if storyboard is not None:
+            frame_file = f"frames/frame_{len(storyboard):03d}"
+            self.visualize(frame_file, title=f"A. Leaf is full! Splitting...", highlight_nodes=[leaf])
+            storyboard.append(frame_file + ".png")
+
         total = len(leaf.keys)
         split = total // 2
         left, right = LeafNode(), LeafNode()
@@ -37,9 +91,20 @@ class BPlusTree:
         left.pointers = leaf.pointers[:split]
         right.pointers = leaf.pointers[split:]
 
-        # maintain linked list
-        right.next = leaf.next
+        # --- FIX THE LINKED LIST ---
+        right.next = leaf.next 
         left.next = right
+        if leaf.parent:
+            parent = leaf.parent
+            try:
+                pos = parent.child_pointers.index(leaf)
+                if pos > 0:
+                    left_sibling = parent.child_pointers[pos - 1]
+                    if left_sibling and left_sibling.is_leaf:
+                        left_sibling.next = left 
+            except ValueError:
+                pass 
+        # --- END FIX ---
 
         # connect to parent
         if leaf.parent is None:
@@ -48,18 +113,38 @@ class BPlusTree:
             root.child_pointers = [left, right]
             left.parent = right.parent = root
             self.root = root
+            
+            if storyboard is not None:
+                frame_file = f"frames/frame_{len(storyboard):03d}"
+                self.visualize(frame_file, title=f"B. Split complete. New root created.", highlight_nodes=[left, right, root])
+                storyboard.append(frame_file + ".png")
         else:
             parent = leaf.parent
-            pos = parent.child_pointers.index(leaf)
+            pos = parent.child_pointers.index(leaf) 
             parent.child_pointers[pos] = left
             parent.child_pointers.insert(pos + 1, right)
             parent.keys.insert(pos, right.keys[0])
             left.parent = right.parent = parent
+            
+            if storyboard is not None:
+                frame_file = f"frames/frame_{len(storyboard):03d}"
+                self.visualize(frame_file, title=f"B. Split complete. Promoting key {right.keys[0]}", highlight_nodes=[left, right, parent])
+                storyboard.append(frame_file + ".png")
 
             if len(parent.child_pointers) > self.p_internal:
-                self.split_internal(parent)
+                # Pass storyboard to internal split, too!
+                self.split_internal(parent, storyboard) # Pass along
 
-    def split_internal(self, node):
+    def split_internal(self, node, storyboard=None):
+        """
+        Splits an internal node.
+        If a storyboard is provided, generates animation frames.
+        """
+        if storyboard is not None:
+            frame_file = f"frames/frame_{len(storyboard):03d}"
+            self.visualize(frame_file, title=f"C. Internal node is full! Splitting...", highlight_nodes=[node])
+            storyboard.append(frame_file + ".png")
+
         total = len(node.keys)
         mid = total // 2
 
@@ -83,6 +168,11 @@ class BPlusTree:
             root.child_pointers = [left, right]
             left.parent = right.parent = root
             self.root = root
+
+            if storyboard is not None:
+                frame_file = f"frames/frame_{len(storyboard):03d}"
+                self.visualize(frame_file, title=f"D. Internal split creates new root", highlight_nodes=[left, right, root])
+                storyboard.append(frame_file + ".png")
         else:
             parent = node.parent
             pos = parent.child_pointers.index(node)
@@ -91,8 +181,13 @@ class BPlusTree:
             parent.keys.insert(pos, promoted)
             left.parent = right.parent = parent
 
+            if storyboard is not None:
+                frame_file = f"frames/frame_{len(storyboard):03d}"
+                self.visualize(frame_file, title=f"D. Internal split complete. Promoting {promoted}", highlight_nodes=[left, right, parent])
+                storyboard.append(frame_file + ".png")
+
             if len(parent.child_pointers) > self.p_internal:
-                self.split_internal(parent)
+                self.split_internal(parent, storyboard) # Pass storyboard recursively
 
 
     def find_leaf_with_parent_info(self, key):
@@ -109,6 +204,7 @@ class BPlusTree:
         return node, path
 
     def delete(self, key):
+        # NOTE: Animation is not implemented for delete yet.
         leaf, path = self.find_leaf_with_parent_info(key)
 
         # 1) remove key from leaf if present
@@ -137,28 +233,39 @@ class BPlusTree:
 
         # Need to fix underflow in leaf.
         self._fix_leaf_underflow(leaf)
+        # Call your new refresh function to ensure all keys are correct
+        self._refresh_separators_from_children(self.root)
 
-    # Helper: update parent separators if first key changed in a leaf
-    def _fix_parent_separators_after_leaf_change(self, leaf):
-        # When a leaf's smallest key changed, parent separator may need update.
-        if leaf.parent is None:
+    def _fix_parent_separators_after_leaf_change(self, node):
+        """Recursively fixes parent separators if the first key of a node changes."""
+        if node.parent is None:
             return
-        parent = leaf.parent
-        # find index of leaf in parent.child_pointers
-        idx = parent.child_pointers.index(leaf)
-        # separator key for child at idx is parent.keys[idx-1] (separates left and right)
-        if idx > 0:
-            left_key = parent.keys[idx - 1]
-            # separator should equal leaf.keys[0] (smallest key of right child)
-            if len(leaf.keys) > 0 and parent.keys[idx - 1] != leaf.keys[0]:
-                parent.keys[idx - 1] = leaf.keys[0]
+        parent = node.parent
+        try:
+            idx = parent.child_pointers.index(node)
+            if idx > 0 and len(node.keys) > 0:
+                if parent.keys[idx - 1] != node.keys[0]:
+                    parent.keys[idx - 1] = node.keys[0]
+                    # propagate upward if needed
+                    self._fix_parent_separators_after_leaf_change(parent)
+            elif idx > 0 and len(node.keys) == 0:
+                # If leaf becomes empty, this key will be removed by merge logic anyway
+                pass
+        except ValueError:
+             pass # Node may have been removed already
+
 
     def _fix_leaf_underflow(self, leaf):
         parent = leaf.parent
         if parent is None:
             return  # shouldn't happen (we handled root earlier)
 
-        pos = parent.child_pointers.index(leaf)
+        try:
+            pos = parent.child_pointers.index(leaf)
+        except ValueError:
+             print("DEBUG: Node not found in parent, likely already merged.")
+             return # Node already processed
+
         left = parent.child_pointers[pos - 1] if pos - 1 >= 0 else None
         right = parent.child_pointers[pos + 1] if pos + 1 < len(parent.child_pointers) else None
 
@@ -166,53 +273,41 @@ class BPlusTree:
 
         # 1) Try borrow from left
         if left and len(left.keys) > min_keys_leaf:
-            # borrow last key from left
             borrowed_key = left.keys.pop(-1)
             borrowed_ptr = left.pointers.pop(-1)
             leaf.keys.insert(0, borrowed_key)
             leaf.pointers.insert(0, borrowed_ptr)
-            # update parent's separator between left and leaf
             parent.keys[pos - 1] = leaf.keys[0]
             return
 
         # 2) Try borrow from right
         if right and len(right.keys) > min_keys_leaf:
-            # borrow first key from right
             borrowed_key = right.keys.pop(0)
             borrowed_ptr = right.pointers.pop(0)
             leaf.keys.append(borrowed_key)
             leaf.pointers.append(borrowed_ptr)
-            # update parent's separator
-            parent.keys[pos] = right.keys[0] if right.keys else parent.keys[pos]
+            parent.keys[pos] = right.keys[0] # right.keys[0] is the new smallest key
             return
 
         # 3) Merge with sibling (prefer left if exists else right)
         if left:
-            # merge left + leaf => left will hold all keys, remove leaf
             left.keys.extend(leaf.keys)
             left.pointers.extend(leaf.pointers)
             left.next = leaf.next
-            # remove leaf from parent
             remove_index = pos
             parent.child_pointers.pop(remove_index)
-            # parent separator at remove_index-1 must be removed
             parent.keys.pop(remove_index - 1)
-            # check parent underflow
             self._fix_internal_after_delete(parent)
         elif right:
-            # merge leaf + right => leaf will absorb right (we can choose to append right into leaf)
             leaf.keys.extend(right.keys)
             leaf.pointers.extend(right.pointers)
             leaf.next = right.next
-            # remove right
             parent.child_pointers.pop(pos + 1)
             parent.keys.pop(pos)
             self._fix_internal_after_delete(parent)
 
     def _fix_internal_after_delete(self, node):
-        # If node is root, special rules:
         if node is self.root:
-            # If root has only one child and is an internal node -> shrink tree
             if not node.is_leaf and len(node.child_pointers) == 1:
                 child = node.child_pointers[0]
                 child.parent = None
@@ -221,58 +316,51 @@ class BPlusTree:
 
         min_ptr = (self.p_internal + 1) // 2  # ceil(p_internal/2)
         if len(node.child_pointers) >= min_ptr:
-            # node ok
             return
 
         parent = node.parent
-        pos = parent.child_pointers.index(node)
+        if not parent: return 
+
+        try:
+            pos = parent.child_pointers.index(node)
+        except ValueError:
+            print("DEBUG: Internal node not found in parent, likely already merged.")
+            return
+
         left = parent.child_pointers[pos - 1] if pos - 1 >= 0 else None
         right = parent.child_pointers[pos + 1] if pos + 1 < len(parent.child_pointers) else None
 
-        # Try borrow from left: left must have > min_ptr children => > (min_ptr - 1) keys
+        # Try borrow from left
         if left and len(left.child_pointers) > min_ptr:
-            # Move last child from left to front of node
             borrowed_child = left.child_pointers.pop(-1)
-            borrowed_key = parent.keys[pos - 1]
-            # Update parent key: parent's separator becomes left's new last key's next smallest
-            parent.keys[pos - 1] = left.keys.pop(-1) if left.keys else parent.keys[pos - 1]
-            # Insert borrowed child & adjust keys in node
+            borrowed_key_from_parent = parent.keys[pos - 1]
+            parent.keys[pos - 1] = left.keys.pop(-1) 
             node.child_pointers.insert(0, borrowed_child)
             borrowed_child.parent = node
-            # Insert borrowed_key at front of node.keys?
-            # For internal redistribution we must shift keys properly
-            node.keys.insert(0, borrowed_key)
+            node.keys.insert(0, borrowed_key_from_parent)
             return
 
         # Try borrow from right
         if right and len(right.child_pointers) > min_ptr:
-            # Move first child from right to end of node
             borrowed_child = right.child_pointers.pop(0)
-            borrowed_key = parent.keys[pos]
-            # Update parent key to be right.keys[0] (new separator)
-            parent.keys[pos] = right.keys.pop(0) if right.keys else parent.keys[pos]
+            borrowed_key_from_parent = parent.keys[pos]
+            parent.keys[pos] = right.keys.pop(0) 
             node.child_pointers.append(borrowed_child)
             borrowed_child.parent = node
-            node.keys.append(borrowed_key)
+            node.keys.append(borrowed_key_from_parent)
             return
 
-        # Merge cases: prefer left if exists, else merge with right
+        # Merge cases
         if left:
-            # merge left + node into left
-            # append separator key from parent between left and node
             sep = parent.keys.pop(pos - 1)
-            # left.keys extend with sep and node.keys
             left.keys.append(sep)
             left.keys.extend(node.keys)
             left.child_pointers.extend(node.child_pointers)
             for ch in node.child_pointers:
                 ch.parent = left
-            # remove node from parent.child_pointers
             parent.child_pointers.pop(pos)
-            # check parent recursively
             self._fix_internal_after_delete(parent)
         elif right:
-            # merge node + right into node
             sep = parent.keys.pop(pos)
             node.keys.append(sep)
             node.keys.extend(right.keys)
@@ -282,36 +370,86 @@ class BPlusTree:
             parent.child_pointers.pop(pos + 1)
             self._fix_internal_after_delete(parent)
         
+        # This was in your original, but it's better to call it once
+        # at the end of delete(), not in the recursive fix.
+        # self._refresh_separators_from_children(self.root)
+    
+    def _refresh_separators_from_children(self, node=None):
+        """
+        Your new recursive function to refresh all separator keys.
+        """
+        if node is None:
+            node = self.root
+
+        if node.is_leaf:
+            return
+
+        new_keys = []
+        for i in range(1, len(node.child_pointers)):
+            child = node.child_pointers[i]
+            
+            leftmost = child
+            while not leftmost.is_leaf:
+                if not leftmost.child_pointers: # Handle empty internal node
+                    leftmost = None
+                    break
+                leftmost = leftmost.child_pointers[0]
+            
+            if leftmost and leftmost.keys:
+                 new_keys.append(leftmost.keys[0])
+            elif i-1 < len(node.keys):
+                 # Fallback: keep old key if child is empty
+                 new_keys.append(node.keys[i-1])
+
+        node.keys = new_keys
+
+        # Recurse to children
+        for ch in node.child_pointers:
+            if not ch.is_leaf:
+                self._refresh_separators_from_children(ch)
         
     def print_tree(self):
-        """Level-order printing of tree nodes (keys only)."""
-        from collections import deque
-        q = deque([(self.root, 0)])
-        cur_level = 0
-        lines = []
-        while q:
-            node, lvl = q.popleft()
-            if lvl != cur_level:
-                print(f"Level {cur_level}: " + " | ".join(lines))
-                lines = []
-                cur_level = lvl
+        print("\n===== B+ TREE STRUCTURE =====")
+
+        def _print_node(node, level=0, prefix="Root"):
+            indent = "  " * level
+            node_type = "Leaf" if node.is_leaf else "Internal"
+            print(f"{indent}{prefix} ({node_type}): {node.keys}")
+
             if node.is_leaf:
-                lines.append(f"[Leaf {node.keys}]")
+                for i, ptr in enumerate(node.pointers):
+                    print(f"{indent}   ↳ Key={node.keys[i]}, Ptr={ptr}")
             else:
-                lines.append(f"[Int {node.keys}]")
-                for ch in node.child_pointers:
-                    q.append((ch, lvl + 1))
-        if lines:
-            print(f"Level {cur_level}: " + " | ".join(lines))
+                for i, child in enumerate(node.child_pointers):
+                    _print_node(child, level + 1, f"Child {i}")
+
+        _print_node(self.root)
+
+        # print leaf chain for validation
+        print("==============================")
+        print("\n-- Leaf Chain (in order) --")
+        node = self.root
+        while not node.is_leaf:
+            node = node.child_pointers[0]
+
+        chain = []
+        while node:
+            chain.append(f"{node.keys}")
+            node = node.next
+
+        print(" → ".join(chain))
+        print("--------------------------------\n")
+
 
     def export_dot(self, filename="bptree.dot"):
         """
-        Export tree to Graphviz DOT file. Internal nodes point to child nodes, leaf nodes show keys/pointers.
+        Your original export_dot function.
         """
         node_id = {}
         nodes = []
 
         def assign(node):
+            if not node: return
             if id(node) in node_id:
                 return
             nid = f"n{len(node_id)}"
@@ -339,47 +477,235 @@ class BPlusTree:
                     label = " | ".join(str(k) for k in node.keys) if node.keys else "internal"
                     f.write(f'{nid} [label="{{{label}}}"];\n')
                     for i, ch in enumerate(node.child_pointers):
-                        f.write(f"{nid} -> {node_id[id(ch)]};\n")
+                        if ch and id(ch) in node_id:
+                             f.write(f"{nid} -> {node_id[id(ch)]};\n")
+            
+            # Add leaf chain
+            leaf = self.root
+            if leaf:
+                while leaf and not leaf.is_leaf:
+                    if not leaf.child_pointers:
+                        leaf = None
+                        break
+                    leaf = leaf.child_pointers[0]
+            
+            if leaf:
+                while leaf and leaf.next:
+                    if id(leaf) in node_id and id(leaf.next) in node_id:
+                        f.write(f"{node_id[id(leaf)]} -> {node_id[id(leaf.next)]} [style=dashed, color=blue, constraint=false];\n")
+                    leaf = leaf.next
+
             f.write("}\n")
         print(f"Wrote DOT to {filename} (render with `dot -Tpng {filename} -o tree.png`)")
 
 
+    # ==========> NEW/UPDATED visualizer <==========
+    def visualize(self, filename="bplustree", view=False, highlight_nodes=None, title=""):
+        """
+        Generates a visualization of the B+ Tree using Graphviz.
+        - Uses HTML-like labels to prevent common Graphviz rendering errors.
+        - highlight_nodes: A list of nodes to color yellow.
+        - title: A title to display at the top of the image.
+        - view: Set to True to open the file after render. False for animation frames.
+        """
+        dot = Digraph(comment="B+ Tree", format="png")
+        # Use 'shape=plain' because we are providing our own HTML-like label
+        dot.attr('node', shape='plain', style='filled') 
+        dot.attr(rankdir='TB') # Top-to-Bottom layout
 
-# ==========> visualizer
-    def visualize(self, filename="bplustree", view=True):
-            dot = Digraph(comment="B+ Tree", format="png")
-            dot.attr('node', shape='record', style='filled', fillcolor='lightgrey')
-
-            def add_node(node, parent_name=None, edge_label=""):
-                node_id = str(id(node))
-                if node.is_leaf:
-                    label = " | ".join(str(k) for k in node.keys)
-                    dot.node(node_id, f"{{Leaf|{label}}}", fillcolor="lightblue")
-                else:
-                    label = " | ".join(str(k) for k in node.keys)
-                    dot.node(node_id, f"{{Internal|{label}}}", fillcolor="lightcoral")
-
-                if parent_name:
-                    dot.edge(parent_name, node_id, label=edge_label)
-
-                
-                if not node.is_leaf:
-                    for i, child in enumerate(node.child_pointers):
-                        add_node(child, node_id, edge_label=f"child {i}")
-
+        # Add a title if one is provided
+        if title:
+            dot.attr(label=title, fontsize='20')
             
-            add_node(self.root)
+        if highlight_nodes is None:
+            highlight_nodes = []
 
+        node_ids = {}
+
+        def assign_ids_tree(node):
+            """Recursively assign IDs by traversing child pointers."""
+            if not node: return
+            if id(node) in node_ids:
+                return # Already visited
             
-            leaf = self.root
-            while not leaf.is_leaf:
+            node_ids[id(node)] = f"n{len(node_ids)}"
+            
+            if not node.is_leaf:
+                for child in node.child_pointers:
+                    assign_ids_tree(child)
+
+        # 1. First, traverse the main tree structure
+        assign_ids_tree(self.root)
+
+        # 2. Second, find the leftmost leaf and traverse the *entire* .next chain
+        #    This finds any orphaned leaves that assign_ids_tree missed.
+        leaf = self.root
+        if leaf:
+            while leaf and not leaf.is_leaf:
+                if not leaf.child_pointers:
+                    leaf = None
+                    break
                 leaf = leaf.child_pointers[0]
+        
+        while leaf: # Go through the *entire* leaf chain
+            if id(leaf) not in node_ids:
+                # Found an orphan!
+                node_ids[id(leaf)] = f"n{len(node_ids)}"
+            leaf = leaf.next
+        
+        # --- End of new ID assignment logic ---
+
+        if not self.root or id(self.root) not in node_ids:
+             # print("Tree is empty, visualization will be minimal.")
+             return 
+
+        def escape_html(s):
+            """Escapes special characters for HTML labels."""
+            s = str(s)
+            s = s.replace("&", "&amp;")
+            s = s.replace("<", "&lt;")
+            s = s.replace(">", "&gt;")
+            s = s.replace("\"", "&quot;")
+            s = s.replace("'", "&#39;")
+            return s
+
+        def add_node_to_dot(node, parent_name=None, parent_port_idx=None):
+            """Recursively adds nodes and parent-child edges to the graph."""
+            if not node or id(node) not in node_ids: return
+            
+            node_id = node_ids[id(node)]
+            
+            # Check if this node should be highlighted
+            node_color = "yellow" if node in highlight_nodes else ("lightblue" if node.is_leaf else "lightcoral")
+            
+            if node.is_leaf:
+                # --- Leaf Node HTML-like Label ---
+                parts = []
+                for i, k in enumerate(node.keys):
+                    ptr_str = escape_html(node.pointers[i] if i < len(node.pointers) else "P_err")
+                    k_str = escape_html(k)
+                    parts.append(f"<TD>{k_str}, {ptr_str}</TD>")
+                
+                label = f'<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" STYLE="ROUNDED"><TR>{"".join(parts) if parts else "<TD>empty</TD>"}</TR></TABLE>>'
+                dot.node(node_id, label=label, fillcolor=node_color)
+            else:
+                # --- Internal Node HTML-like Label ---
+                label_parts = []
+                for i, k in enumerate(node.keys):
+                    k_str = escape_html(k)
+                    label_parts.append(f'<TD PORT="p{i}"></TD><TD>{k_str}</TD>')
+                label_parts.append(f'<TD PORT="p{len(node.keys)}"></TD>') # Final pointer port
+                
+                label = f'<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" STYLE="ROUNDED"><TR>{"".join(label_parts)}</TR></TABLE>>'
+                dot.node(node_id, label=label, fillcolor=node_color)
+
+            if parent_name:
+                # Connect from parent's specific port (e.g., 'p0') to the child node
+                dot.edge(f"{parent_name}:p{parent_port_idx}", node_id)
+            
+            if not node.is_leaf:
+                for i, child in enumerate(node.child_pointers):
+                    # Recurse, passing the clean node_id and the port index 'i'
+                    add_node_to_dot(child, node_id, parent_port_idx=i) 
+
+        # --- Draw all nodes and parent-child edges ---
+        add_node_to_dot(self.root)
+
+        # --- Draw adjacent leaf pointers ---
+        leaf = self.root
+        if not leaf: return 
+        
+        while leaf and not leaf.is_leaf:
+            if not leaf.child_pointers: 
+                leaf = None 
+                break
+            leaf = leaf.child_pointers[0]
+        
+        if leaf: 
             while leaf and leaf.next:
-                dot.edge(str(id(leaf)), str(id(leaf.next)), style="dashed", color="blue")
-                leaf = leaf.next
+                if id(leaf) in node_ids and id(leaf.next) in node_ids:
+                    current_id = node_ids[id(leaf)]
+                    next_id = node_ids[id(leaf.next)]
+                    
+                    dot.edge(current_id, next_id, style="dashed", color="blue", constraint="false")
+                
+                leaf = leaf.next 
+        
+        # --- Render the final image ---
+        try:
+            # We pass filename *without* extension, dot.render adds it.
+            output_path = dot.render(filename, view=view, cleanup=True)
+            if view: # Only print if we're not making frames
+                print(f"B+ tree visualization saved to: {output_path}")
+        except Exception as e:
+            print(f"\n--- Error rendering graph (is Graphviz installed?) ---")
+            print(f"Error: {e}")
+            print("Writing .dot file as fallback.")
+            dot.save(filename + ".dot")
+            # print(f"Wrote DOT to {filename}.dot (render with `dot -Tpng {filename}.dot -o tree.png`)")
+            print("----------------------------------------------------------\n")
 
-            
-            output_path = dot.render(filename, view=view)
-            print(f"B+ tree visualization saved to: {output_path}")
-            
+    # --- Animation Helper Functions ---
 
+    def _create_gif(self, frame_files, output_filename):
+        """Stitches a list of PNG files into a GIF, standardizing all frame sizes."""
+        
+        raw_images = []
+        max_width = 0
+        max_height = 0
+
+        # First pass: Read images and find max dimensions
+        for filename in frame_files:
+            try:
+                img = Image.open(filename)
+                raw_images.append(img)
+                if img.width > max_width:
+                    max_width = img.width
+                if img.height > max_height:
+                    max_height = img.height
+            except FileNotFoundError:
+                print(f"Warning: Frame file not found {filename}, skipping.")
+
+        if not raw_images:
+            print("Error: No frames found to create GIF.")
+            return
+
+        # Second pass: Create new images with padding
+        standardized_images = []
+        for img in raw_images:
+            # Create a new blank canvas (white background)
+            new_frame = Image.new('RGBA', (max_width, max_height), (255, 255, 255, 255))
+            
+            # Calculate position to paste the old image (centered)
+            x_offset = (max_width - img.width) // 2
+            y_offset = (max_height - img.height) // 2
+            
+            # Paste the original image
+            new_frame.paste(img, (x_offset, y_offset))
+            standardized_images.append(new_frame)
+            
+            # Close the original image file handle
+            img.close()
+
+        # Save the GIF
+        print(f"Creating GIF... This may take a moment.")
+        
+        # FIX: 'duration' is in MILLISECONDS. 
+        # 3000ms = 3 seconds per frame.
+        # loop=0 means loop forever.
+        iio.mimsave(output_filename, standardized_images, duration=3000, loop=0)
+        print(f"\n✨ Animation saved to {output_filename}")
+
+    def _cleanup_frames(self, frame_files):
+        """Deletes the temporary PNG frame files and their .dot files."""
+        count = 0
+        for f_png in frame_files:
+            f_dot = f_png.replace(".png", "") # Get the base filename
+            try:
+                os.remove(f_png)
+                os.remove(f_dot) # Graphviz also creates .dot files
+                count += 1
+            except OSError:
+                pass
+        if count > 0:
+            print(f"🧹 Cleaned up {count} temporary frames.")
