@@ -35,7 +35,7 @@ class FileStorage:
                 print("  [Empty]")
             else:
                 for i, rec in enumerate(records):
-                   if rec: print(f"  Slot {i}: {rec.name}, SSN={rec.ssn}, Dept={rec.departmentcode}, Salary={rec.salary}")
+                   if rec: print(f"  Slot {i}: {rec.name}, SSN={rec.ssn}, deleted={rec.deleted}, Dept={rec.departmentcode}, Salary={rec.salary}")
         print("================================\n")
         
     def delete_record(self, ptr: Tuple[int, int]):

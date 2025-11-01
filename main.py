@@ -75,6 +75,7 @@ if __name__ == "__main__":
             print(f"Pointer for SSN={ssn} not found in blocks (may not be inserted)")
 
         tree.delete(ssn)
+        # tree.visualize(f"tree_after_deletions{i}", view=False)
         
     # Moved visualization outside the loop to capture the final state
     print("\nAfter Deletions (11, 6, 3):")
