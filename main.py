@@ -85,4 +85,4 @@ if __name__ == "__main__":
 
     print("\nFinal File Blocks:")
     storage.print_blocks()
-    storage.visualize_file_blocks()
+    #storage.visualize_file_blocks()
